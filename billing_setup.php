@@ -281,23 +281,47 @@ foreach (['/var/www/html/data/cache', '/var/www/html/data/resources'] as $dir) {
 // --- CREATE DATABASE TABLES ---
 echo "\n[7/7] Creating database tables...\n";
 
-// Load EspoCRM config to get DB credentials
-$configPath = '/var/www/html/data/config.php';
-if (!file_exists($configPath)) {
-    echo "  ERROR: Cannot find EspoCRM config at $configPath\n";
+// EspoCRM 7+ splits config across two files — merge both
+$dbConfig = [];
+foreach ([
+    '/var/www/html/data/config.php',
+    '/var/www/html/data/config-internal.php',
+] as $cfgPath) {
+    if (file_exists($cfgPath)) {
+        $c = include $cfgPath;
+        if (isset($c['database'])) {
+            $dbConfig = array_merge($dbConfig, $c['database']);
+            echo "  Read config: $cfgPath\n";
+        } else {
+            echo "  No 'database' key in: $cfgPath\n";
+        }
+    } else {
+        echo "  Not found: $cfgPath\n";
+    }
+}
+
+if (empty($dbConfig)) {
+    echo "  ERROR: Could not read any DB config. Aborting.\n";
     exit(1);
 }
-$config = include $configPath;
 
-$host   = $config['database']['host'] ?? 'localhost';
-$port   = $config['database']['port'] ?? '3306';
-$dbname = $config['database']['dbname'] ?? '';
-$user   = $config['database']['user'] ?? '';
-$pass   = $config['database']['password'] ?? '';
+$host   = $dbConfig['host']     ?? 'espocrm-db';
+$port   = $dbConfig['port']     ?? '3306';
+$dbname = $dbConfig['dbname']   ?? '';
+$user   = $dbConfig['user']     ?? '';
+$pass   = $dbConfig['password'] ?? '';
+
+// 'localhost' triggers Unix socket in PHP PDO — force TCP instead
+if ($host === 'localhost') $host = '127.0.0.1';
+
+echo "  Connecting: host=$host port=$port dbname=$dbname user=$user\n";
 
 try {
-    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $user, $pass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo = new PDO(
+        "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4",
+        $user, $pass,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
 
     // Create invoice table
     $pdo->exec("CREATE TABLE IF NOT EXISTS `invoice` (
