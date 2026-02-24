@@ -278,4 +278,83 @@ foreach (['/var/www/html/data/cache', '/var/www/html/data/resources'] as $dir) {
     echo "  Cleared $count file(s) from: $dir\n";
 }
 
+// --- CREATE DATABASE TABLES ---
+echo "\n[7/7] Creating database tables...\n";
+
+// Load EspoCRM config to get DB credentials
+$configPath = '/var/www/html/data/config.php';
+if (!file_exists($configPath)) {
+    echo "  ERROR: Cannot find EspoCRM config at $configPath\n";
+    exit(1);
+}
+$config = include $configPath;
+
+$host   = $config['database']['host'] ?? 'localhost';
+$port   = $config['database']['port'] ?? '3306';
+$dbname = $config['database']['dbname'] ?? '';
+$user   = $config['database']['user'] ?? '';
+$pass   = $config['database']['password'] ?? '';
+
+try {
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Create invoice table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `invoice` (
+        `id` VARCHAR(24) NOT NULL,
+        `name` VARCHAR(255) DEFAULT NULL,
+        `number` VARCHAR(36) DEFAULT NULL,
+        `status` VARCHAR(255) DEFAULT 'Draft',
+        `account_id` VARCHAR(24) DEFAULT NULL,
+        `account_name` VARCHAR(255) DEFAULT NULL,
+        `contact_id` VARCHAR(24) DEFAULT NULL,
+        `contact_name` VARCHAR(255) DEFAULT NULL,
+        `date_invoiced` DATE DEFAULT NULL,
+        `date_due` DATE DEFAULT NULL,
+        `amount` DECIMAL(12,2) DEFAULT NULL,
+        `amount_currency` VARCHAR(3) DEFAULT 'USD',
+        `payment_method` VARCHAR(255) DEFAULT NULL,
+        `stripe_payment_link` VARCHAR(500) DEFAULT NULL,
+        `notes` MEDIUMTEXT DEFAULT NULL,
+        `assigned_user_id` VARCHAR(24) DEFAULT NULL,
+        `assigned_user_name` VARCHAR(255) DEFAULT NULL,
+        `created_at` DATETIME DEFAULT NULL,
+        `modified_at` DATETIME DEFAULT NULL,
+        `created_by_id` VARCHAR(24) DEFAULT NULL,
+        `modified_by_id` VARCHAR(24) DEFAULT NULL,
+        `deleted` TINYINT(1) DEFAULT 0,
+        PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+    echo "  Created table: invoice\n";
+
+    // Create invoice_item table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `invoice_item` (
+        `id` VARCHAR(24) NOT NULL,
+        `name` VARCHAR(255) DEFAULT NULL,
+        `invoice_id` VARCHAR(24) DEFAULT NULL,
+        `invoice_name` VARCHAR(255) DEFAULT NULL,
+        `description` MEDIUMTEXT DEFAULT NULL,
+        `tier` VARCHAR(255) DEFAULT NULL,
+        `item_type` VARCHAR(255) DEFAULT NULL,
+        `quantity` INT DEFAULT 1,
+        `unit_price` DECIMAL(12,2) DEFAULT NULL,
+        `unit_price_currency` VARCHAR(3) DEFAULT 'USD',
+        `amount` DECIMAL(12,2) DEFAULT NULL,
+        `amount_currency` VARCHAR(3) DEFAULT 'USD',
+        `created_at` DATETIME DEFAULT NULL,
+        `modified_at` DATETIME DEFAULT NULL,
+        `created_by_id` VARCHAR(24) DEFAULT NULL,
+        `modified_by_id` VARCHAR(24) DEFAULT NULL,
+        `deleted` TINYINT(1) DEFAULT 0,
+        PRIMARY KEY (`id`),
+        KEY `invoice_id` (`invoice_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+    echo "  Created table: invoice_item\n";
+
+    echo "  Database tables ready!\n";
+} catch (Exception $e) {
+    echo "  DB ERROR: " . $e->getMessage() . "\n";
+    exit(1);
+}
+
 echo "\n=== Billing setup complete! ===\n";
